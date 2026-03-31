@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>World Clock Widget v3</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:10px;background:#191919}
+
+/* ── GRID LAYOUT ── */
+.widget{display:grid;gap:8px;width:100%}
+
+/* PC: 3 columns */
+@media(min-width:900px){
+  .widget{grid-template-columns:165px 1fr 165px}
+}
+
+/* Tablet: 2 columns — left + middle, then right full width */
+@media(min-width:540px) and (max-width:899px){
+  .widget{grid-template-columns:1fr 1fr}
+  .card:nth-child(3){grid-column:1 / -1}
+}
+
+/* Mobile: 1 column, full width */
+@media(max-width:539px){
+  .widget{grid-template-columns:1fr}
+}
+
+.card{background:#222;border-radius:10px;padding:12px 14px;border:0.5px solid rgba(255,255,255,0.07);min-width:0}
+.lbl{font-size:9px;font-weight:600;letter-spacing:.8px;color:#555;margin-bottom:6px}
+.clock-val{font-size:20px;font-weight:500;color:#e8e8e8;font-variant-numeric:tabular-nums;letter-spacing:-.3px}
+.clock-tz{font-size:10px;color:#505050;margin-top:3px}
+.clock-date{font-size:10px;color:#484848;margin-top:6px;padding-top:6px;border-top:0.5px solid rgba(255,255,255,0.06)}
+.hijri-date{font-size:10px;color:#6a8a5a;margin-top:4px}
+.hijri-arabic{font-size:12px;color:#5a7a4a;direction:rtl;margin-top:2px}
+.prayer-wrap{margin-top:10px;padding-top:8px;border-top:0.5px solid rgba(255,255,255,0.06)}
+.prayer-lbl{font-size:8px;font-weight:600;letter-spacing:.6px;color:#444;margin-bottom:4px}
+.prayer-list{display:flex;flex-direction:column;gap:3px}
+.prayer-item{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:5px}
+.prayer-item.active{background:#1e2a1a;border-left:2px solid #5a8a4a}
+.prayer-name{font-size:10px;color:#707070}
+.prayer-item.active .prayer-name{color:#8aba70}
+.prayer-time{font-size:10px;font-weight:500;color:#505050;font-variant-numeric:tabular-nums}
+.prayer-item.active .prayer-time{color:#7aaa60}
+.next-prayer{font-size:9px;color:#4a6a3a;margin-top:5px;text-align:center}
+
+/* tablet/mobile: prayer columns side by side inside wide card */
+@media(min-width:540px) and (max-width:899px){
+  .card:nth-child(3) .prayer-list{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:4px;
+  }
+  .card:nth-child(3) .prayer-item{flex-direction:column;align-items:flex-start;gap:1px}
+}
+
+.search-section{margin-bottom:10px;padding-bottom:8px;border-bottom:0.5px solid rgba(255,255,255,0.06)}
+.search-row{display:flex;align-items:center;gap:8px}
+.search-icon-lbl{font-size:9px;color:#555;font-weight:600;letter-spacing:.5px;white-space:nowrap}
+.search-wrap{position:relative;flex:1;min-width:0}
+.search-input{width:100%;background:#1a1a1a;color:#ccc;border:0.5px solid rgba(255,255,255,0.14);border-radius:6px;padding:5px 8px;font-size:11px;outline:none}
+.search-input:focus{border-color:rgba(255,255,255,0.25)}
+.search-input::placeholder{color:#3a3a3a}
+.dropdown{position:absolute;top:calc(100% + 3px);left:0;right:0;background:#1e1e1e;border:0.5px solid rgba(255,255,255,0.12);border-radius:6px;max-height:160px;overflow-y:auto;z-index:100;display:none;scrollbar-width:thin;scrollbar-color:#333 transparent}
+.dropdown.open{display:block}
+.d-item{padding:5px 8px;font-size:10px;color:#888;cursor:pointer;border-bottom:0.5px solid rgba(255,255,255,0.04)}
+.d-item:last-child{border-bottom:none}
+.d-item:hover,.d-item.focused{background:#2a2a2a;color:#ccc}
+.d-item .d-country{color:#404040;font-size:9px;margin-left:4px}
+.selected-pill{display:inline-block;margin-top:5px;font-size:9px;color:#5a8a4a;background:#1a2a1a;border-radius:4px;padding:2px 6px;border:0.5px solid #2a4a2a}
+
+.w-lbl{font-size:9px;font-weight:600;letter-spacing:.8px;color:#555;margin-bottom:6px}
+.w-main{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.w-icon{font-size:26px;line-height:1}
+.w-temp{font-size:22px;font-weight:500;color:#e8e8e8;letter-spacing:-.3px}
+.w-feels{font-size:10px;color:#484848}
+.w-desc{font-size:10px;color:#555;margin-top:3px}
+.w-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:8px}
+.stat{background:#1a1a1a;border-radius:7px;padding:6px 8px}
+.stat-lbl{font-size:8px;color:#444;letter-spacing:.4px;margin-bottom:3px}
+.stat-val{font-size:11px;font-weight:500;color:#c0c0c0}
+.stat-sub{font-size:9px;color:#484848;margin-top:1px}
+.bar-wrap{margin-bottom:8px}
+.bar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.bar-lbl{font-size:9px;color:#444;letter-spacing:.3px}
+.bar-val-blue{font-size:10px;font-weight:500;color:#6fa8dc}
+.bar-val-amber{font-size:10px;font-weight:500;color:#e0aa50}
+.bar{height:3px;background:#2c2c2c;border-radius:2px;overflow:hidden}
+.bar-fill-blue{height:100%;border-radius:2px;background:#3a6090;transition:width .4s}
+.bar-fill-amber{height:100%;border-radius:2px;background:#c08030;transition:width .4s}
+.sun-row{display:flex;justify-content:space-between;margin-bottom:8px;padding:6px 8px;background:#1a1a1a;border-radius:7px}
+.sun-item{text-align:center}
+.sun-lbl{font-size:8px;color:#444;letter-spacing:.3px;margin-bottom:2px}
+.sun-val{font-size:11px;font-weight:500;color:#c0a050}
+.w-days{display:flex;gap:4px;border-top:0.5px solid rgba(255,255,255,0.06);padding-top:8px;flex-wrap:wrap}
+.w-day{flex:1;min-width:36px;text-align:center;font-size:9px;color:#505050;line-height:1.6;padding:4px 2px;border-radius:6px}
+.w-day-name{display:block;color:#404040;font-weight:600;font-size:9px}
+.w-day-icon{display:block;font-size:13px;margin:2px 0}
+.loading{font-size:10px;color:#404040;text-align:center;padding:8px 0}
+.makka-badge{font-size:8px;color:#a08040;letter-spacing:.3px;margin-bottom:4px}
+.spinner{display:inline-block;width:8px;height:8px;border:1.5px solid #333;border-top-color:#555;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="widget">
+
+<!-- LEFT: Clock + Prayer -->
+<div class="card">
+  <div class="lbl" id="left-lbl">DHAKA TIME</div>
+  <div class="clock-val" id="ck1">--:--:--</div>
+  <div class="clock-tz" id="left-tz">UTC +06:00</div>
+  <div class="clock-date" id="dt1">--</div>
+  <div class="hijri-date" id="hijri-en">--</div>
+  <div class="hijri-arabic" id="hijri-ar">--</div>
+  <div class="prayer-wrap">
+    <div class="prayer-lbl" id="left-prayer-lbl">🕌 PRAYER TIMES · DHAKA</div>
+    <div class="prayer-list" id="prayer-list"><div class="loading">Loading...</div></div>
+    <div class="next-prayer" id="next-prayer"></div>
+  </div>
+</div>
+
+<!-- MIDDLE: Search Bar + Weather -->
+<div class="card">
+  <div class="search-section">
+    <div class="search-row">
+      <span class="search-icon-lbl">📍 CITY</span>
+      <div class="search-wrap">
+        <input class="search-input" id="city-search" placeholder="Search city..." autocomplete="off"
+          oninput="onSearch(this.value)" onkeydown="onKey(event)" onfocus="openDD()">
+        <div class="dropdown" id="dropdown"></div>
+      </div>
+    </div>
+    <div class="selected-pill" id="selected-pill">Dhaka, Bangladesh</div>
+  </div>
+
+  <div class="w-lbl" id="w-lbl">DHAKA WEATHER</div>
+  <div class="w-main">
+    <span class="w-icon" id="w-icon">⏳</span>
+    <div>
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span class="w-temp" id="w-temp">--°C</span>
+        <span class="w-feels" id="w-feels">--</span>
+      </div>
+      <div class="w-desc" id="w-desc">Loading weather...</div>
+    </div>
+  </div>
+  <div class="w-stats">
+    <div class="stat"><div class="stat-lbl">💨 WIND</div><div class="stat-val" id="w-wind">--</div><div class="stat-sub" id="w-wind-dir">--</div></div>
+    <div class="stat"><div class="stat-lbl">🌡️ PRESSURE</div><div class="stat-val" id="w-pressure">--</div><div class="stat-sub">hPa</div></div>
+    <div class="stat"><div class="stat-lbl">👁️ VISIBILITY</div><div class="stat-val" id="w-vis">--</div><div class="stat-sub" id="w-vis-sub">--</div></div>
+  </div>
+  <div class="bar-wrap">
+    <div class="bar-top"><span class="bar-lbl">💧 HUMIDITY</span><span class="bar-val-blue" id="w-hum-val">--%</span></div>
+    <div class="bar"><div class="bar-fill-blue" id="w-hum-bar" style="width:0%"></div></div>
+  </div>
+  <div class="bar-wrap">
+    <div class="bar-top"><span class="bar-lbl">☀️ UV INDEX</span><span class="bar-val-amber" id="w-uv-val">--</span></div>
+    <div class="bar"><div class="bar-fill-amber" id="w-uv-bar" style="width:0%"></div></div>
+  </div>
+  <div class="sun-row">
+    <div class="sun-item"><div class="sun-lbl">🌅 SUNRISE</div><div class="sun-val" id="w-sunrise">--</div></div>
+    <div class="sun-item"><div class="sun-lbl">⏳ DAYLIGHT</div><div class="sun-val" id="w-daylight">--</div></div>
+    <div class="sun-item"><div class="sun-lbl">🌇 SUNSET</div><div class="sun-val" id="w-sunset">--</div></div>
+  </div>
+  <div class="w-days" id="w-days">
+    <div class="loading">Loading forecast...</div>
+  </div>
+</div>
+
+<!-- RIGHT: UTC + Makkah -->
+<div class="card">
+  <div class="lbl">UTC TIME</div>
+  <div class="clock-val" id="ck2">--:--:--</div>
+  <div class="clock-tz">Universal Time</div>
+  <div class="clock-date" id="dt2">--</div>
+  <div class="hijri-date" id="hijri-utc-en">--</div>
+  <div class="hijri-arabic" id="hijri-utc-ar">--</div>
+  <div class="prayer-wrap">
+    <div class="prayer-lbl">🕌 MAKKAH PRAYER TIMES</div>
+    <div class="makka-badge">مكة المكرمة · Makkah al-Mukarramah</div>
+    <div class="prayer-list" id="prayer-list-utc"><div class="loading">Loading...</div></div>
+    <div class="next-prayer" id="next-prayer-utc"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const hijriMonths=['Muharram','Safar','Rabi al-Awwal','Rabi al-Thani','Jumada al-Awwal','Jumada al-Thani','Rajab',"Sha'ban",'Ramadan','Shawwal',"Dhu al-Qi'dah",'Dhu al-Hijjah'];
+const hijriAr=['مُحَرَّم','صَفَر','رَبيع الأوَّل','رَبيع الثَّاني','جُمادى الأولى','جُمادى الآخرة','رَجَب','شَعْبان','رَمَضان','شَوَّال','ذو القَعْدة','ذو الحِجَّة'];
+const pKeys=[{k:'Fajr',l:'Fajr'},{k:'Sunrise',l:'Sunrise'},{k:'Dhuhr',l:'Dhuhr'},{k:'Asr',l:'Asr'},{k:'Maghrib',l:'Maghrib'},{k:'Isha',l:'Isha'}];
+const wIcons={0:'☀️',1:'🌤️',2:'⛅',3:'🌥️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'🌨️',73:'🌨️',75:'❄️',80:'🌦️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
+const wDesc={0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',48:'Foggy',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',80:'Light showers',81:'Rain showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm'};
+const windDirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+const mn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+let current={n:'Dhaka',c:'Bangladesh',tz:'Asia/Dhaka',off:'+06:00',lat:23.8103,lon:90.4125};
+let leftPrayer={},makkahPrayer={};
+let geoResults=[],focusIdx=-1,searchTimer=null;
+
+function fmt12(t){if(!t)return'--';const[h,m]=t.split(':').map(Number);return`${h%12||12}:${String(m).padStart(2,'0')} ${h>=12?'PM':'AM'}`;}
+function toMin(t){const[h,m]=t.split(':').map(Number);return h*60+m;}
+function windDir(deg){return windDirs[Math.round(deg/22.5)%16]||'--';}
+function tzOffset(tz){try{const s=new Intl.DateTimeFormat('en',{timeZone:tz,timeZoneName:'shortOffset'}).formatToParts(new Date()).find(p=>p.type==='timeZoneName').value;return s.replace('GMT','UTC');}catch{return'';}}
+
+async function geoSearch(q){
+  if(!q||q.length<2){closeDD();return;}
+  document.getElementById('dropdown').innerHTML='<div class="d-item" style="color:#444"><span class="spinner"></span> Searching…</div>';
+  document.getElementById('dropdown').classList.add('open');
+  try{
+    const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=en&format=json`);
+    const d=await r.json();
+    geoResults=(d.results||[]).filter(x=>x.timezone);
+    renderDD();
+  }catch{
+    document.getElementById('dropdown').innerHTML='<div class="d-item" style="color:#555">Search failed</div>';
+  }
+}
+
+function renderDD(){
+  const dd=document.getElementById('dropdown');
+  if(!geoResults.length){dd.innerHTML='<div class="d-item" style="color:#444">No results</div>';dd.classList.add('open');return;}
+  dd.innerHTML=geoResults.map((r,i)=>{
+    const sub=[r.admin1,r.country].filter(Boolean).join(', ');
+    return`<div class="d-item${i===focusIdx?' focused':''}" data-i="${i}">${r.name}<span class="d-country">${sub}</span></div>`;
+  }).join('');
+  dd.classList.add('open');
+  dd.querySelectorAll('.d-item').forEach(el=>{
+    el.addEventListener('mousedown',e=>{e.preventDefault();selectGeoResult(parseInt(el.dataset.i));});
+  });
+}
+
+function closeDD(){document.getElementById('dropdown').classList.remove('open');}
+function onSearch(q){focusIdx=-1;clearTimeout(searchTimer);if(!q.trim()){closeDD();return;}searchTimer=setTimeout(()=>geoSearch(q),300);}
+function openDD(){if(document.getElementById('city-search').value.trim()&&geoResults.length)renderDD();}
+document.addEventListener('click',e=>{if(!e.target.closest('.search-wrap'))closeDD();});
+
+function onKey(e){
+  const dd=document.getElementById('dropdown');
+  if(!dd.classList.contains('open'))return;
+  if(e.key==='ArrowDown'){e.preventDefault();focusIdx=Math.min(focusIdx+1,geoResults.length-1);renderDD();}
+  else if(e.key==='ArrowUp'){e.preventDefault();focusIdx=Math.max(focusIdx-1,0);renderDD();}
+  else if(e.key==='Enter'&&focusIdx>=0){e.preventDefault();selectGeoResult(focusIdx);}
+  else if(e.key==='Escape')closeDD();
+}
+
+function selectGeoResult(i){
+  const r=geoResults[i];
+  if(!r)return;
+  document.getElementById('city-search').value='';
+  closeDD();
+  geoResults=[];focusIdx=-1;
+  const off=tzOffset(r.timezone);
+  current={n:r.name,c:r.country||'',tz:r.timezone,off,lat:r.latitude,lon:r.longitude};
+  document.getElementById('selected-pill').textContent=`${r.name}${r.admin1?', '+r.admin1:''}, ${r.country||''}`;
+  document.getElementById('left-lbl').textContent=`${r.name.toUpperCase()} TIME`;
+  document.getElementById('left-tz').textContent=off;
+  document.getElementById('left-prayer-lbl').textContent=`🕌 PRAYER TIMES · ${r.name.toUpperCase()}`;
+  fetchPrayer(r.name,r.country||'','prayer-list','next-prayer','hijri-en','hijri-ar',r.timezone,true);
+  fetchWeather(r.latitude,r.longitude,r.name,r.timezone);
+}
+
+function renderPrayers(times,nowMin,listId,nextId){
+  const p=pKeys.filter(x=>times[x.k]);
+  if(!p.length){document.getElementById(listId).innerHTML='<div class="loading">No data</div>';return;}
+  let ni=-1;
+  for(let i=0;i<p.length;i++){if(toMin(times[p[i].k])>nowMin){ni=i;break;}}
+  let html='';
+  p.forEach((x,i)=>{html+=`<div class="prayer-item${i===ni?' active':''}"><span class="prayer-name">${x.l}</span><span class="prayer-time">${fmt12(times[x.k])}</span></div>`;});
+  document.getElementById(listId).innerHTML=html;
+  if(ni!==-1){
+    const diff=toMin(times[p[ni].k])-nowMin;
+    const h=Math.floor(diff/60),m=diff%60;
+    document.getElementById(nextId).textContent=`Next: ${p[ni].l} in ${h>0?h+'h ':''}${m}m`;
+  }else document.getElementById(nextId).textContent='Next: Fajr tomorrow';
+}
+
+async function fetchPrayer(cityName,country,listId,nextId,hijriEnId,hijriArId,tz,isLeft){
+  document.getElementById(listId).innerHTML='<div class="loading"><span class="spinner"></span>Loading...</div>';
+  try{
+    const r=await fetch(`https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(cityName)}&country=${encodeURIComponent(country)}&method=2`);
+    const d=await r.json();
+    if(d.code===200){
+      const times=d.data.timings;
+      const hijri=d.data.date.hijri;
+      const mi=parseInt(hijri.month.number)-1;
+      if(hijriEnId)document.getElementById(hijriEnId).textContent=`${hijri.day} ${hijriMonths[mi]} ${hijri.year} AH`;
+      if(hijriArId)document.getElementById(hijriArId).textContent=`${hijri.day} ${hijriAr[mi]} ${hijri.year}`;
+      if(isLeft)leftPrayer=times; else makkahPrayer=times;
+      const local=new Date(new Date().toLocaleString('en-US',{timeZone:tz}));
+      renderPrayers(times,local.getHours()*60+local.getMinutes(),listId,nextId);
+    }else{
+      document.getElementById(listId).innerHTML='<div class="loading">Not available</div>';
+    }
+  }catch(e){document.getElementById(listId).innerHTML='<div class="loading">Error loading</div>';}
+}
+
+async function fetchWeather(lat,lon,cityName,tz){
+  document.getElementById('w-icon').textContent='⏳';
+  document.getElementById('w-desc').textContent='Loading...';
+  document.getElementById('w-days').innerHTML='<div class="loading">Loading forecast...</div>';
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,weathercode,windspeed_10m,winddirection_10m,relativehumidity_2m,surface_pressure,visibility,uv_index&daily=weathercode,temperature_2m_max,sunrise,sunset&timezone=${encodeURIComponent(tz)}&forecast_days=7`;
+    const r=await fetch(url);
+    const d=await r.json();
+    const c=d.current,daily=d.daily;
+    const code=c.weathercode;
+    document.getElementById('w-icon').textContent=wIcons[code]||'🌡️';
+    document.getElementById('w-temp').textContent=`${Math.round(c.temperature_2m)}°C`;
+    document.getElementById('w-feels').textContent=`Feels like ${Math.round(c.apparent_temperature)}°`;
+    document.getElementById('w-desc').textContent=wDesc[code]||'--';
+    document.getElementById('w-wind').textContent=`${Math.round(c.windspeed_10m)} km/h`;
+    document.getElementById('w-wind-dir').textContent=`↗ ${windDir(c.winddirection_10m)}`;
+    document.getElementById('w-pressure').textContent=`${Math.round(c.surface_pressure)}`;
+    const visKm=Math.round((c.visibility||0)/1000);
+    document.getElementById('w-vis').textContent=`${visKm} km`;
+    document.getElementById('w-vis-sub').textContent=visKm>10?'Clear':visKm>5?'Good':'Hazy';
+    const hum=c.relativehumidity_2m||0;
+    document.getElementById('w-hum-val').textContent=`${hum}%`;
+    document.getElementById('w-hum-bar').style.width=`${hum}%`;
+    const uv=Math.round(c.uv_index||0);
+    const uvLabel=uv<=2?'Low':uv<=5?'Moderate':uv<=7?'High':uv<=10?'Very High':'Extreme';
+    document.getElementById('w-uv-val').textContent=`${uv} · ${uvLabel}`;
+    document.getElementById('w-uv-bar').style.width=`${Math.min(uv/12*100,100)}%`;
+    if(daily.sunrise&&daily.sunrise[0]){
+      const sr=new Date(daily.sunrise[0]),ss=new Date(daily.sunset[0]);
+      const fmt=d=>`${d.getHours()%12||12}:${String(d.getMinutes()).padStart(2,'0')} ${d.getHours()>=12?'PM':'AM'}`;
+      document.getElementById('w-sunrise').textContent=fmt(sr);
+      document.getElementById('w-sunset').textContent=fmt(ss);
+      const diffSec=(ss-sr)/1000;
+      document.getElementById('w-daylight').textContent=`${Math.floor(diffSec/3600)}h ${Math.floor((diffSec%3600)/60)}m`;
+    }
+    const wdShort=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    let daysHtml='';
+    for(let i=1;i<Math.min(8,daily.time.length);i++){
+      const dt=new Date(daily.time[i]);
+      const dcode=daily.weathercode[i];
+      daysHtml+=`<div class="w-day"><span class="w-day-name">${wdShort[dt.getDay()]}</span><span class="w-day-icon">${wIcons[dcode]||'🌡️'}</span>${Math.round(daily.temperature_2m_max[i])}°</div>`;
+    }
+    document.getElementById('w-days').innerHTML=daysHtml;
+    document.getElementById('w-lbl').textContent=`${cityName.toUpperCase()} WEATHER`;
+  }catch(e){
+    document.getElementById('w-desc').textContent='Weather unavailable';
+    document.getElementById('w-days').innerHTML='<div class="loading">--</div>';
+  }
+}
+
+function tick(){
+  const now=new Date();
+  const local=new Date(now.toLocaleString('en-US',{timeZone:current.tz}));
+  const utc=new Date(now.toLocaleString('en-US',{timeZone:'UTC'}));
+  const f=d=>[d.getHours(),d.getMinutes(),d.getSeconds()].map(n=>String(n).padStart(2,'0')).join(':');
+  const fd=d=>`${dn[d.getDay()]}, ${d.getDate()} ${mn[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById('ck1').textContent=f(local);
+  document.getElementById('ck2').textContent=f(utc);
+  document.getElementById('dt1').textContent=fd(local);
+  document.getElementById('dt2').textContent=fd(utc);
+  if(Object.keys(leftPrayer).length){
+    renderPrayers(leftPrayer,local.getHours()*60+local.getMinutes(),'prayer-list','next-prayer');
+  }
+  if(Object.keys(makkahPrayer).length){
+    const mk=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Riyadh'}));
+    renderPrayers(makkahPrayer,mk.getHours()*60+mk.getMinutes(),'prayer-list-utc','next-prayer-utc');
+  }
+}
+
+fetchPrayer('Dhaka','Bangladesh','prayer-list','next-prayer','hijri-en','hijri-ar','Asia/Dhaka',true);
+fetchPrayer('Makkah','Saudi Arabia','prayer-list-utc','next-prayer-utc','hijri-utc-en','hijri-utc-ar','Asia/Riyadh',false);
+fetchWeather(23.8103,90.4125,'Dhaka','Asia/Dhaka');
+tick();
+setInterval(tick,1000);
+setInterval(()=>{
+  fetchPrayer(current.n,current.c,'prayer-list','next-prayer','hijri-en','hijri-ar',current.tz,true);
+  fetchPrayer('Makkah','Saudi Arabia','prayer-list-utc','next-prayer-utc','hijri-utc-en','hijri-utc-ar','Asia/Riyadh',false);
+  fetchWeather(current.lat,current.lon,current.n,current.tz);
+},3600000);
+</script>
+</body>
+</html>
